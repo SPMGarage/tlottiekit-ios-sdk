@@ -33,7 +33,11 @@ arch_of() {
 # The new Apple linker wants -platform_version even for `ld -r`.
 platform_version_of() {
     case "$1" in
-        *-apple-ios-sim | x86_64-apple-ios)
+        aarch64-apple-ios-sim)
+            # Arm64 simulators start at iOS 14, and Rust's prebuilt
+            # compiler_builtins for this target says so.
+            echo "ios-simulator 14.0 $(xcrun --sdk iphonesimulator --show-sdk-version)" ;;
+        x86_64-apple-ios)
             echo "ios-simulator $IPHONEOS_DEPLOYMENT_TARGET $(xcrun --sdk iphonesimulator --show-sdk-version)" ;;
         *-apple-ios)
             echo "ios $IPHONEOS_DEPLOYMENT_TARGET $(xcrun --sdk iphoneos --show-sdk-version)" ;;
