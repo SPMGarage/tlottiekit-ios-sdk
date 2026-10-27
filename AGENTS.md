@@ -196,7 +196,7 @@ let options = TLottieAnimation.Options(fitzModifier: .type3,
 | `apple/exported_symbols.txt`, `apple/module.modulemap`                                           | TLottieKit                    | the exported C surface (`_tlottie_*`) and the `CTLottie` Clang module                                                           |
 | `apple/Sources/TLottieKit/`                                                                      | TLottieKit                    | `TLottieAnimation.swift`, `TLottieView.swift`, `TLottiePlayer.swift`, `PlaybackClock.swift`, `Gzip.swift`, `TLottieError.swift` |
 | `apple/Tests/TLottieKitTests/`                                                                   | TLottieKit                    | XCTest + `Fixtures/square.json`, `square.tgs`                                                                                   |
-| `apple/Examples/TLottieDemo/`                                                                    | TLottieKit                    | XcodeGen `project.yml`; the `.xcodeproj` is generated and ignored                                                               |
+| `apple/Examples/TLottieDemo/`                                                                    | TLottieKit                    | XcodeGen `project.yml` (`.xcodeproj` is generated and ignored); `Resources/` has `pulse.json` + free sample `.tgs` stickers     |
 | `apple/release.sh`, `.github/workflows/apple.yml`, `.github/README.md`, `AGENTS.md`, `CLAUDE.md` | TLottieKit                    | `.github/README.md` is what GitHub shows; the root `README.md` stays upstream's                                                 |
 | `research-cache/`, `apple/build/`, `apple/Artifacts/`, `.build/`                                 | local only                    | gitignored                                                                                                                      |
 
@@ -249,4 +249,4 @@ git fetch upstream --no-tags && git merge upstream/main                         
 - No dotLottie (`.lottie`) support. It needs a ZIP reader; zlib is already linked.
 - No Reduce Motion handling.
 - Release binaries are built locally. Building them in CI from source would give provenance.
-- Upstream contribution planned: an issue plus a PR to `dkaraush/tlottie` adding an Apple example and a link to this package. Never include `Package.swift` or `apple/` wholesale in that PR.
+- Upstream contribution in progress: issue `dkaraush/tlottie#17` (opened 2026-10-27) proposes `examples/apple/` (from-source `build.sh`, the Swift package, tests and demo) plus a README section linking to this package. The ready branch is `feature/upstream-apple-example`, based on `upstream/main`. Open the PR against upstream `main` only after the maintainer answers. Never add a root `Package.swift`, binaries or release tooling to upstream.
