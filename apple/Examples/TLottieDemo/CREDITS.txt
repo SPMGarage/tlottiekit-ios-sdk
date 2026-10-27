@@ -25,3 +25,9 @@ coffee.lottie, pigeon.lottie, theming.lottie
   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
   SOFTWARE.
+
+bounce.gif
+  Drawn for this repository with ImageIO; MIT like the rest of the Swift layer.
+
+cat.mp4, mascot.json, cherry.tgs, duck.tgs, laughing.tgs, mole.tgs
+  Free samples added by the repository maintainer.

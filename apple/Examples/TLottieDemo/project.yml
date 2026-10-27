@@ -21,6 +21,9 @@ targets:
     sources: [Sources, Resources]
     dependencies:
       - package: TLottieKit
+        product: TLottieKit
+      - package: TLottieKit
+        product: TLottieKitMedia
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.spmgarage.tlottiekit.demo
@@ -37,6 +40,9 @@ targets:
     sources: [Sources, Resources]
     dependencies:
       - package: TLottieKit
+        product: TLottieKit
+      - package: TLottieKit
+        product: TLottieKitMedia
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.spmgarage.tlottiekit.demo.mac

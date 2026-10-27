@@ -1,5 +1,6 @@
 import SwiftUI
 import TLottieKit
+import TLottieKitMedia
 import UniformTypeIdentifiers
 
 @main
@@ -25,13 +26,9 @@ struct ContentView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    TLottiePlayer(
-                        model.animation,
-                        loopMode: loops ? .loop : .playOnce,
-                        isPlaying: isPlaying,
-                        speed: speed
-                    )
-                    .aspectRatio(1, contentMode: .fit)
+                    player
+                        .aspectRatio(1, contentMode: .fit)
+                        .clipShape(RoundedRectangle(cornerRadius: 24))
                     .frame(maxWidth: 320)
                     .background(RoundedRectangle(cornerRadius: 24).fill(.quaternary))
 
@@ -48,9 +45,17 @@ struct ContentView: View {
 
                     if showsGrid {
                         LazyVGrid(columns: gridColumns, spacing: 12) {
-                            ForEach(model.gridAnimations.indices, id: \.self) { index in
-                                TLottiePlayer(model.gridAnimations[index], isPlaying: isPlaying, speed: speed)
-                                    .aspectRatio(1, contentMode: .fit)
+                            if let media = model.media {
+                                // One TLottieMedia can back many views; each decodes on its own.
+                                ForEach(0 ..< DemoModel.gridSize, id: \.self) { _ in
+                                    TLottieMediaPlayer(media, isPlaying: isPlaying, speed: speed)
+                                        .aspectRatio(1, contentMode: .fit)
+                                }
+                            } else {
+                                ForEach(model.gridAnimations.indices, id: \.self) { index in
+                                    TLottiePlayer(model.gridAnimations[index], isPlaying: isPlaying, speed: speed)
+                                        .aspectRatio(1, contentMode: .fit)
+                                }
                             }
                         }
                     }
@@ -68,6 +73,15 @@ struct ContentView: View {
             }
         }
         .task { model.reload() }
+    }
+
+    @ViewBuilder
+    private var player: some View {
+        if let media = model.media {
+            TLottieMediaPlayer(media, loopMode: loops ? .loop : .playOnce, isPlaying: isPlaying, speed: speed)
+        } else {
+            TLottiePlayer(model.animation, loopMode: loops ? .loop : .playOnce, isPlaying: isPlaying, speed: speed)
+        }
     }
 
     private var controls: some View {
@@ -109,19 +123,21 @@ struct DemoItem: Identifiable, Hashable {
 
 @MainActor
 final class DemoModel: ObservableObject {
-    static let fileExtensions = ["json", "tgs", "lottie"]
+    static let lottieExtensions = ["json", "tgs", "lottie"]
+    static let mediaExtensions = ["gif", "mp4", "mov"]
+    static let fileExtensions = lottieExtensions + mediaExtensions
+    static let gridSize = 12
     static let contentTypes: [UTType] = fileExtensions.map { UTType(filenameExtension: $0) ?? .data }
 
     @Published private(set) var items: [DemoItem] = []
     @Published private(set) var selected: DemoItem?
     @Published private(set) var animation: TLottieAnimation?
     @Published private(set) var gridAnimations: [TLottieAnimation] = []
+    @Published private(set) var media: TLottieMedia?
     @Published private(set) var info = ""
     @Published private(set) var error: String?
 
-    private static let gridSize = 12
-
-    /// Bundled samples plus every .tgs / .json / .lottie in the app's Documents folder.
+    /// Bundled samples plus every supported file in the app's Documents folder.
     func reload() {
         var urls = Self.fileExtensions.flatMap { Bundle.main.urls(forResourcesWithExtension: $0, subdirectory: nil) ?? [] }
         if let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first,
@@ -130,13 +146,29 @@ final class DemoModel: ObservableObject {
         }
         items = urls.sorted { $0.lastPathComponent < $1.lastPathComponent }.map(DemoItem.init)
         if selected == nil {
-            select(items.first)
+            // `-select cat` on the command line opens cat.mp4 first.
+            let requested = UserDefaults.standard.string(forKey: "select")
+            select(items.first { $0.name == requested } ?? items.first)
         }
     }
 
     func importFile(_ url: URL) {
         let isScoped = url.startAccessingSecurityScopedResource()
         defer { if isScoped { url.stopAccessingSecurityScopedResource() } }
+        if Self.isMedia(url) {
+            // Video is read while it plays, after this access has ended, so play a copy.
+            let copy = FileManager.default.temporaryDirectory.appendingPathComponent(url.lastPathComponent)
+            try? FileManager.default.removeItem(at: copy)
+            do {
+                try FileManager.default.copyItem(at: url, to: copy)
+            } catch {
+                self.error = "Could not read \(url.lastPathComponent)"
+                return
+            }
+            loadMedia(copy)
+            selected = nil
+            return
+        }
         guard let data = try? Data(contentsOf: url) else {
             error = "Could not read \(url.lastPathComponent)"
             return
@@ -147,6 +179,10 @@ final class DemoModel: ObservableObject {
 
     func select(_ item: DemoItem?) {
         selected = item
+        if let item, Self.isMedia(item.id) {
+            loadMedia(item.id)
+            return
+        }
         guard let item, let data = try? Data(contentsOf: item.id) else { return }
         load(data, name: item.id.lastPathComponent)
     }
@@ -164,11 +200,36 @@ final class DemoModel: ObservableObject {
             // Separate instances, so the grid renders on several threads at once.
             gridAnimations = (0 ..< Self.gridSize).compactMap { _ in try? TLottieAnimation(data: data) }
             self.animation = animation
+            media = nil
             error = nil
             info = String(
                 format: "%@\n%.0f×%.0f · %d frames · %.0f fps · %.2f s\nparse %.2f ms · first frame %.2f ms at 512 px",
                 name, animation.size.width, animation.size.height, animation.frameCount,
                 animation.frameRate, animation.duration, parseTime, renderTime
+            )
+        } catch {
+            self.error = "\(name): \(error)"
+        }
+    }
+
+    private static func isMedia(_ url: URL) -> Bool {
+        mediaExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    private func loadMedia(_ url: URL) {
+        let name = url.lastPathComponent
+        do {
+            let openStart = CFAbsoluteTimeGetCurrent()
+            let media = try TLottieMedia(contentsOf: url)
+            let openTime = (CFAbsoluteTimeGetCurrent() - openStart) * 1000
+            animation = nil
+            gridAnimations = []
+            self.media = media
+            error = nil
+            info = String(
+                format: "%@\n%.0f×%.0f · %@ · %.2f s\nopened in %.2f ms",
+                name, media.size.width, media.size.height, media.kind == .gif ? "GIF" : "video",
+                media.duration, openTime
             )
         } catch {
             self.error = "\(name): \(error)"
