@@ -1,7 +1,7 @@
 #if canImport(SwiftUI)
 import SwiftUI
 
-/// SwiftUI player for a `TLottieAnimation`.
+/// SwiftUI player for a ``TLottieAnimation``.
 ///
 /// ```swift
 /// TLottiePlayer(animation, loopMode: .loop)
@@ -14,6 +14,16 @@ public struct TLottiePlayer {
     private let speed: Double
     private let onFinish: (() -> Void)?
 
+    /// Creates a player.
+    ///
+    /// - Parameters:
+    ///   - animation: What to show; nil shows nothing. Give every player that
+    ///     runs at the same time its own instance.
+    ///   - loopMode: What happens at the last frame.
+    ///   - isPlaying: Plays when true. A finished `.playOnce` animation is
+    ///     restarted only when this changes from false to true.
+    ///   - speed: Playback speed multiplier; 0 freezes the current frame.
+    ///   - onFinish: Called on the main thread when a `.playOnce` animation ends.
     public init(
         _ animation: TLottieAnimation?,
         loopMode: TLottieLoopMode = .loop,

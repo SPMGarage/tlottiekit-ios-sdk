@@ -2,7 +2,7 @@
 import SwiftUI
 import TLottieKit
 
-/// SwiftUI player for a `TLottieMedia` GIF or video.
+/// SwiftUI player for a ``TLottieMedia`` GIF or video.
 ///
 /// ```swift
 /// TLottieMediaPlayer(try? TLottieMedia(contentsOf: url))
@@ -15,6 +15,16 @@ public struct TLottieMediaPlayer {
     private let speed: Double
     private let onFinish: (() -> Void)?
 
+    /// Creates a player.
+    ///
+    /// - Parameters:
+    ///   - media: What to show; nil shows nothing. One ``TLottieMedia`` can
+    ///     back any number of players.
+    ///   - loopMode: What happens at the end.
+    ///   - isPlaying: Plays when true. Finished `.playOnce` media is restarted
+    ///     only when this changes from false to true.
+    ///   - speed: Playback speed multiplier; 0 freezes the current frame.
+    ///   - onFinish: Called on the main thread when `.playOnce` media ends.
     public init(
         _ media: TLottieMedia?,
         loopMode: TLottieLoopMode = .loop,

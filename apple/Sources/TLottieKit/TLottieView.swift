@@ -2,17 +2,29 @@ import QuartzCore
 
 #if canImport(UIKit)
 import UIKit
+/// The view TLottieKit's players build on: `UIView` on iOS.
 public typealias TLottiePlatformView = UIView
 #elseif canImport(AppKit)
 import AppKit
+/// The view TLottieKit's players build on: `NSView` on macOS.
 public typealias TLottiePlatformView = NSView
 #endif
 
-/// Plays a `TLottieAnimation` (UIKit on iOS, AppKit on macOS).
+/// Plays a ``TLottieAnimation`` (UIKit on iOS, AppKit on macOS).
 ///
 /// Frames are rendered off the main thread at the view's pixel size and shown
 /// aspect-fit. While the view is not in a window it shows the current frame
 /// but does not advance, so offscreen animations cost nothing.
+///
+/// ```swift
+/// let view = TLottieView()
+/// view.animation = try TLottieAnimation(named: "sticker")
+/// view.loopMode = .playOnce
+/// view.onFinish = { print("done") }
+/// view.play()
+/// ```
+///
+/// In SwiftUI, use ``TLottiePlayer`` instead.
 @MainActor
 open class TLottieView: TLottiePlatformView {
     /// The animation to show. Setting a new one shows its first frame;
@@ -24,6 +36,7 @@ open class TLottieView: TLottiePlatformView {
         }
     }
 
+    /// What happens at the last frame. The default is ``TLottieLoopMode/loop``.
     public var loopMode: TLottieLoopMode = .loop
 
     /// Playback speed multiplier. 0 freezes the current frame.
@@ -42,6 +55,8 @@ open class TLottieView: TLottiePlatformView {
     /// Called on the main thread when a `.playOnce` animation reaches its last frame.
     public var onFinish: (() -> Void)?
 
+    /// Whether playback is running. It turns false when a ``TLottieLoopMode/playOnce``
+    /// animation reaches its end.
     public private(set) var isPlaying = false
 
     /// The frame currently shown (or about to be shown).
@@ -61,11 +76,13 @@ open class TLottieView: TLottiePlatformView {
     private var timer: Timer?
     #endif
 
+    /// Creates an empty view. Set ``animation`` and call ``play()``.
     public override init(frame: CGRect) {
         super.init(frame: frame)
         commonInit()
     }
 
+    /// Creates the view from a storyboard or nib.
     public required init?(coder: NSCoder) {
         super.init(coder: coder)
         commonInit()
@@ -83,6 +100,8 @@ open class TLottieView: TLottiePlatformView {
 
     // MARK: Playback
 
+    /// Starts or resumes playback. A finished ``TLottieLoopMode/playOnce``
+    /// animation starts again from the first frame.
     public func play() {
         if let animation, loopMode == .playOnce, clock.isAtEnd(frameCount: animation.frameCount) {
             clock.reset()
@@ -93,6 +112,7 @@ open class TLottieView: TLottiePlatformView {
         updateDriver()
     }
 
+    /// Pauses on the current frame.
     public func pause() {
         isPlaying = false
         updateDriver()
@@ -106,6 +126,8 @@ open class TLottieView: TLottiePlatformView {
         requestRender()
     }
 
+    /// Shows `frame`, clamped to `0 ..< frameCount`, without starting or
+    /// stopping playback.
     public func seek(toFrame frame: Int) {
         guard let animation else { return }
         clock.seek(toFrame: frame, frameCount: animation.frameCount)

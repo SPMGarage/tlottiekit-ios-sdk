@@ -29,7 +29,17 @@ public enum TLottiePixelFormat: Sendable {
 /// One instance can be used from any thread: renders are serialized on an
 /// internal lock, because a tlottie instance is single-threaded. Use one
 /// instance per animation you play in parallel.
+///
+/// ```swift
+/// // sticker.tgs in the app bundle
+/// let animation = try TLottieAnimation(named: "sticker")
+/// let thumbnail = try animation.makeImage(frame: 0, width: 256, height: 256)
+/// ```
+///
+/// To play it, give it to a ``TLottiePlayer`` (SwiftUI) or a ``TLottieView``.
 public final class TLottieAnimation: @unchecked Sendable {
+    /// How an animation is loaded and rendered. Every option has a default,
+    /// so `Options()` gives the animation exactly as drawn.
     public struct Options: Sendable {
         /// Skin tone for emoji animations.
         public var fitzModifier: TLottieFitzModifier
@@ -46,6 +56,8 @@ public final class TLottieAnimation: @unchecked Sendable {
         /// below 1 MB.
         public var maxDecompressedSize: Int
 
+        /// Creates options. Each parameter defaults to the value described on
+        /// the property of the same name.
         public init(
             fitzModifier: TLottieFitzModifier = .none,
             colorReplacements: [UInt32: UInt32] = [:],
@@ -84,6 +96,14 @@ public final class TLottieAnimation: @unchecked Sendable {
     /// ZIP archive. The format is detected from the data, not the file name.
     /// For a `.lottie` file with several animations, the manifest's initial one
     /// is loaded, or the first one.
+    ///
+    /// - Parameters:
+    ///   - data: The file contents.
+    ///   - options: Recoloring, skin tone, pixel format and the inflate limit.
+    /// - Throws: ``TLottieError/invalidData`` when tlottie can not parse it,
+    ///   ``TLottieError/decompressionFailed`` for a corrupt `.tgs` or `.lottie`,
+    ///   and ``TLottieError/decompressedSizeLimitExceeded(limit:)`` when it
+    ///   inflates past ``Options/maxDecompressedSize``.
     public init(data: Data, options: Options = Options()) throws {
         let json: Data
         if Gzip.isCompressed(data) {
@@ -127,7 +147,12 @@ public final class TLottieAnimation: @unchecked Sendable {
     /// - Parameters:
     ///   - frame: Frame number, from 0 to `frameCount - 1`. Fractions interpolate between frames.
     ///   - buffer: At least `bytesPerRow * height` bytes. The whole frame is overwritten.
+    ///   - width: Frame width in pixels, up to 8192. The animation is scaled to fit.
+    ///   - height: Frame height in pixels, up to 8192.
     ///   - bytesPerRow: Row stride, at least `width * 4`. Row padding is left untouched.
+    /// - Throws: ``TLottieError/invalidArgument`` for a size or frame out of range,
+    ///   ``TLottieError/bufferTooSmall`` for a short buffer, and
+    ///   ``TLottieError/renderFailed`` when tlottie gives up on the frame.
     public func render(
         frame: Double,
         into buffer: UnsafeMutableRawBufferPointer,
@@ -182,7 +207,12 @@ public final class TLottieAnimation: @unchecked Sendable {
         }
     }
 
-    /// Renders one frame into a new `CGImage` of `width` x `height` pixels.
+    /// Renders one frame into a new sRGB `CGImage` of `width` x `height` pixels,
+    /// in this animation's ``pixelFormat``.
+    ///
+    /// ```swift
+    /// let thumbnail = try animation.makeImage(frame: 0, width: 256, height: 256)
+    /// ```
     public func makeImage(frame: Double, width: Int, height: Int) throws -> CGImage {
         guard width > 0, height > 0 else {
             throw TLottieError.invalidArgument

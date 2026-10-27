@@ -19,6 +19,7 @@ public enum TLottieMediaError: Error, Equatable, Sendable {
 /// `TLottieAnimation`, one instance can be shown by any number of views at
 /// once: each view decodes it on its own.
 public final class TLottieMedia: Sendable {
+    /// What kind of file this is, detected from its contents.
     public enum Kind: Sendable, Equatable {
         /// An animated (or still) GIF, decoded with ImageIO.
         case gif
@@ -26,7 +27,9 @@ public final class TLottieMedia: Sendable {
         case video
     }
 
+    /// Whether the file is a GIF or a movie.
     public let kind: Kind
+    /// The file. Every view that shows it reads it again on its own.
     public let url: URL
     /// Pixel size as displayed, after a video's rotation is applied.
     public let size: CGSize
@@ -40,6 +43,14 @@ public final class TLottieMedia: Sendable {
 
     /// Loads a `.gif`, `.mp4` or `.mov` file. The format is detected from the
     /// file contents, not the extension.
+    ///
+    /// This reads the file synchronously. The first call in a process also
+    /// loads AVFoundation, so open many files off the main thread.
+    ///
+    /// - Throws: ``TLottieMediaError/unsupportedFormat`` for anything that is
+    ///   not a GIF or movie (WebM included), ``TLottieMediaError/unreadable``
+    ///   when the file can not be read, and ``TLottieMediaError/noFrames`` for
+    ///   a GIF without frames or a movie without a video track.
     public init(contentsOf url: URL) throws {
         let header: Data
         do {

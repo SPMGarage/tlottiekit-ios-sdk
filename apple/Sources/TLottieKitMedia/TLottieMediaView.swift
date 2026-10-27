@@ -8,11 +8,20 @@ import UIKit
 import AppKit
 #endif
 
-/// Plays a `TLottieMedia` GIF or video the way Telegram plays GIFs: muted,
+/// Plays a ``TLottieMedia`` GIF or video the way Telegram plays GIFs: muted,
 /// aspect-fit, looping (or once), and only while the view is in a window.
 ///
 /// A view that leaves its window releases its decoder and costs nothing; when
 /// it comes back it starts again from the first frame.
+///
+/// ```swift
+/// let view = TLottieMediaView()
+/// // A .gif, .mp4 or .mov file
+/// view.media = try TLottieMedia(contentsOf: url)
+/// view.play()
+/// ```
+///
+/// In SwiftUI, use ``TLottieMediaPlayer`` instead.
 @MainActor
 open class TLottieMediaView: TLottiePlatformView {
     /// The GIF or video to show. Setting a new one shows its first frame;
@@ -24,6 +33,7 @@ open class TLottieMediaView: TLottiePlatformView {
         }
     }
 
+    /// What happens at the end. The default is `.loop`.
     public var loopMode: TLottieLoopMode = .loop {
         didSet { playback?.setLoops(loopMode == .loop) }
     }
@@ -39,6 +49,7 @@ open class TLottieMediaView: TLottiePlatformView {
     /// Called on the main thread when `.playOnce` media reaches its end.
     public var onFinish: (() -> Void)?
 
+    /// Whether playback is running. It turns false when `.playOnce` media ends.
     public private(set) var isPlaying = false
 
     private var playback: MediaPlayback?
@@ -47,11 +58,13 @@ open class TLottieMediaView: TLottiePlatformView {
     private var hasFinished = false
     private var generation = 0
 
+    /// Creates an empty view. Set ``media`` and call ``play()``.
     public override init(frame: CGRect) {
         super.init(frame: frame)
         commonInit()
     }
 
+    /// Creates the view from a storyboard or nib.
     public required init?(coder: NSCoder) {
         super.init(coder: coder)
         commonInit()
@@ -67,6 +80,8 @@ open class TLottieMediaView: TLottiePlatformView {
 
     // MARK: Playback
 
+    /// Starts or resumes playback. Finished `.playOnce` media starts again
+    /// from the first frame.
     public func play() {
         if hasFinished {
             hasFinished = false
@@ -76,6 +91,7 @@ open class TLottieMediaView: TLottiePlatformView {
         updateRate()
     }
 
+    /// Pauses on the current frame.
     public func pause() {
         isPlaying = false
         updateRate()
