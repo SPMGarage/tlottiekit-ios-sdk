@@ -24,6 +24,9 @@ targets:
         product: TLottieKit
       - package: TLottieKit
         product: TLottieKitMedia
+    scheme:
+      testTargets:
+        - TLottieDemoUITests
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.spmgarage.tlottiekit.demo
@@ -47,3 +50,17 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.spmgarage.tlottiekit.demo.mac
         CODE_SIGN_IDENTITY: "-"
+  # Taps every sample and checks that it loads and animates:
+  # xcodebuild test -scheme TLottieDemo-iOS -destination 'platform=iOS Simulator,name=<iPhone>'
+  TLottieDemoUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources: [UITests]
+    dependencies:
+      - target: TLottieDemo-iOS
+    settings:
+      base:
+        PRODUCT_NAME: TLottieDemoUITests
+        PRODUCT_BUNDLE_IDENTIFIER: com.spmgarage.tlottiekit.demo.uitests
+        TEST_TARGET_NAME: TLottieDemo-iOS
