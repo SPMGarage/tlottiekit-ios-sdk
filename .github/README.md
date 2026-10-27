@@ -37,6 +37,7 @@ dependencies: [
 targets: [
     .target(name: "App", dependencies: [
         .product(name: "TLottieKit", package: "tlottiekit-ios-sdk"),
+        .product(name: "TLottieKitMedia", package: "tlottiekit-ios-sdk"), // optional: GIF / MP4
     ]),
 ]
 ```
@@ -108,6 +109,24 @@ let animation = try TLottieAnimation(data: data, options: options)
 
 `TLottieAnimation` is `Sendable`. One instance may be used from any thread, but its renders run one at a time, because a tlottie instance is single-threaded. To animate many stickers in parallel, as in a grid, give each view its own instance.
 
+### GIF and MP4 (`TLottieKitMedia`)
+
+Telegram sends "GIFs" as silent H.264 MP4 loops. The optional `TLottieKitMedia` product plays those, and real GIFs, with the same API as `TLottiePlayer` / `TLottieView`:
+
+```swift
+import TLottieKitMedia
+
+TLottieMediaPlayer(try? TLottieMedia(contentsOf: url))   // .gif, .mp4 or .mov, detected by content
+    .aspectRatio(1, contentMode: .fit)
+```
+
+- **Video** goes from `AVAssetReader` to an `AVSampleBufferDisplayLayer` and is decoded by the system (usually in hardware). Audio is never read, so the user's music keeps playing.
+- **GIF** frames are decoded with ImageIO. Frame delays of 10 ms or less play as 100 ms, as in browsers. Transparency works.
+- **Timing** comes from a `CMTimebase`, not a display link. Loops are seamless, and pause and speed only change the timebase rate.
+- **Off screen costs nothing.** A view plays only while it is in a window. Coming back restarts from the first frame.
+- **One `TLottieMedia` can back many views**, as in a grid. Each view decodes on its own.
+- **Not supported:** WebM / VP9 (Telegram video stickers). H.264 has no alpha channel.
+
 ## Supported files
 
 | File                                    | Supported                                                        |
@@ -115,7 +134,8 @@ let animation = try TLottieAnimation(data: data, options: options)
 | Telegram `.tgs`                         | Yes. gzip is detected from the file contents, not the extension. |
 | Lottie JSON `.json` (Bodymovin)         | Yes, for the features listed below.                              |
 | dotLottie `.lottie`                     | Yes. Plays the initial animation, without themes or states.      |
-| WebM, GIF, APNG, WebP, SVG, Rive `.riv` | No. These are not Lottie.                                        |
+| GIF, MP4, MOV                           | Yes, with `TLottieKitMedia` (see above). Not Lottie.             |
+| WebM, APNG, WebP, SVG, Rive `.riv`      | No. These are not Lottie.                                        |
 
 **Renders:**
 
@@ -171,7 +191,7 @@ Rendering is CPU rasterization. The cost scales with pixel count, so render at t
 
 ## Demo app
 
-`apple/Examples/TLottieDemo` holds a SwiftUI app for iOS and macOS. It has a player, speed and loop controls, a 12-player grid and a file importer for `.tgs` and `.json` files.
+`apple/Examples/TLottieDemo` holds a SwiftUI app for iOS and macOS. It has a player, speed and loop controls, a 12-player grid and a file importer for `.tgs`, `.json`, `.lottie`, `.gif`, `.mp4` and `.mov` files. Pass `-select <name>` to open a sample at launch, and `-grid` to show the grid.
 
 ```sh
 ./apple/build-xcframework.sh          # once, builds the local XCFramework
@@ -179,11 +199,12 @@ cd apple/Examples/TLottieDemo
 xcodegen generate && open TLottieDemo.xcodeproj
 ```
 
-On iOS, `.tgs` files copied into the app's Documents folder (Files app, Finder) show up in the list.
+On iOS, files copied into the app's Documents folder (Files app, Finder) show up in the list.
 
 ## Limitations
 
-- **No dotLottie, text, images or expressions.** See [Supported files](#supported-files).
+- **No text, images or expressions.** See [Supported files](#supported-files). dotLottie themes and state machines are ignored.
+- **No WebM video stickers.** `TLottieKitMedia` plays GIF, MP4 and MOV only.
 - **No frame cache yet.** Each frame is rendered into a new buffer. For grids that repeat the same sticker, cache frames in your app.
 - **Static compositions report one frame.** tlottie reports `frameCount == 1` for a composition it can prove static.
 - **Bugs crash instead of failing.** The Rust core is built with `panic=abort`, so a bug inside tlottie crashes the app. A failing render does not crash: malformed input throws `TLottieError`, because upstream treats Lottie JSON as untrusted input.

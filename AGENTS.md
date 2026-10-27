@@ -8,7 +8,7 @@ Every statement below was checked against the source as of TLottieKit 0.1.0 (202
 | Key                                      | Value                                                                                           |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | Repository                               | `https://github.com/SPMGarage/tlottiekit-ios-sdk` (GitHub fork of `dkaraush/tlottie`)           |
-| SwiftPM product / module                 | `TLottieKit` (`import TLottieKit`)                                                              |
+| SwiftPM product / module                 | `TLottieKit`; optional `TLottieKitMedia` for GIF / MP4 loops                                    |
 | Package identity in `.product(package:)` | `tlottiekit-ios-sdk`                                                                            |
 | Latest release                           | `0.1.0`                                                                                         |
 | Platforms                                | iOS 13+, macOS 11+ (no tvOS, watchOS, visionOS or Mac Catalyst slices)                          |
@@ -29,6 +29,7 @@ Every statement below was checked against the source as of TLottieKit 0.1.0 (202
 .package(url: "https://github.com/SPMGarage/tlottiekit-ios-sdk.git", from: "0.1.0"),
 // target dependency
 .product(name: "TLottieKit", package: "tlottiekit-ios-sdk"),
+.product(name: "TLottieKitMedia", package: "tlottiekit-ios-sdk"), // optional: GIF / MP4 loops
 ```
 
 In Xcode, use File ▸ Add Package Dependencies…, paste the same URL, choose "Up to Next Major 0.1.0" and add `TLottieKit` to the app target. No Rust toolchain is needed: SwiftPM downloads the binary from GitHub Releases and checks its checksum.
@@ -40,7 +41,8 @@ In Xcode, use File ▸ Add Package Dependencies…, paste the same URL, choose "
 | Telegram `.tgs`                              | yes                                | gzip, detected by the magic bytes `1f 8b` regardless of file extension, inflated in-process (zlib) |
 | Lottie JSON `.json` (Bodymovin)              | yes, within the feature list below | passed to tlottie as is                                                                            |
 | dotLottie `.lottie` (ZIP)                    | yes, within the feature list below | ZIP read in-process; plays the manifest's initial (else first) animation; images, themes ignored   |
-| WebM / GIF / APNG / WebP / SVG / Rive `.riv` | **no**                             | not Lottie                                                                                         |
+| GIF, MP4 / MOV (H.264, HEVC)                 | yes, with `TLottieKitMedia`        | not Lottie: ImageIO / system video decoder (A4, Media)                                             |
+| WebM / APNG / WebP / SVG / Rive `.riv`       | **no**                             | not Lottie                                                                                         |
 
 Lottie features that **render**:
 
@@ -110,6 +112,30 @@ public struct TLottiePlayer: UIViewRepresentable /* NSViewRepresentable on macOS
     public init(_ animation: TLottieAnimation?, loopMode: TLottieLoopMode = .loop,
                 isPlaying: Bool = true, speed: Double = 1, onFinish: (() -> Void)? = nil)
 }
+// Product TLottieKitMedia (import TLottieKitMedia): GIF and MP4 / MOV loops, played like Telegram GIFs
+public final class TLottieMedia: Sendable {
+    public enum Kind: Sendable, Equatable { case gif, video }
+    public init(contentsOf url: URL) throws    // GIF / MP4 / MOV detected by content; reads header and timing only
+    public let kind: Kind
+    public let url: URL
+    public let size: CGSize                     // display pixels, video rotation applied
+    public let duration: TimeInterval           // one loop
+}
+public enum TLottieMediaError: Error, Equatable, Sendable { case unsupportedFormat, unreadable, noFrames }
+
+@MainActor open class TLottieMediaView: TLottiePlatformView {
+    public var media: TLottieMedia?             // shows the first frame once in a window; does not autoplay
+    public var loopMode: TLottieLoopMode        // default .loop
+    public var speed: Double                    // default 1, clamped to >= 0
+    public var onFinish: (() -> Void)?          // main thread, .playOnce only
+    public private(set) var isPlaying: Bool
+    public func play(); public func pause(); public func stop()
+}
+
+public struct TLottieMediaPlayer: UIViewRepresentable /* NSViewRepresentable on macOS */ {
+    public init(_ media: TLottieMedia?, loopMode: TLottieLoopMode = .loop,
+                isPlaying: Bool = true, speed: Double = 1, onFinish: (() -> Void)? = nil)
+}
 ```
 
 ### A4. Behaviour contracts
@@ -140,6 +166,14 @@ public struct TLottiePlayer: UIViewRepresentable /* NSViewRepresentable on macOS
 - **Errors.**
   - Malformed JSON, a corrupt or truncated gzip or ZIP, a `.lottie` without an animation, or an oversized inflate throws. None of them crash.
   - A bug _inside_ tlottie aborts the process: the Rust core is built with `panic=abort`.
+- **Media (`TLottieKitMedia`).**
+  - Video: `AVAssetReader` hands compressed samples to an `AVSampleBufferDisplayLayer`, which decodes them with the system decoder (H.264 / HEVC, usually hardware). Audio is never read, so other apps' audio keeps playing.
+  - GIF: ImageIO decodes each (composited) frame into a BGRA pixel buffer on the view's serial queue. Frames over 2048 px are scaled down. Delays of 10 ms or less play as 100 ms, as in browsers. GIF transparency works (it is 1-bit); H.264 has no alpha.
+  - A `CMTimebase` drives the layer: pause and speed only change its rate, and there is no display link. Every loop is retimed to follow the previous one, so loops are seamless.
+  - Plays only while in a window. Leaving the window releases the decoder; coming back starts again from the first frame. On iOS, a decoder interrupted by the background is flushed and restarts from the first frame.
+  - Video rotation (`preferredTransform`, multiples of 90°) is applied. Of the edit list, only the first segment's media start is honoured.
+  - One `TLottieMedia` can back any number of views. `TLottieMedia(contentsOf:)` is synchronous: the first call in a process loads AVFoundation (~100 ms seen on the simulator), later ones take a few ms.
+  - WebM / VP9 (Telegram video stickers) is not supported.
 
 ### A5. Recipes (all compile against 0.1.0)
 
@@ -157,6 +191,9 @@ view.play()
 // One frame as an image (e.g. a thumbnail)
 let image = try TLottieAnimation(data: data).makeImage(frame: 0, width: 256, height: 256)
 
+// GIF or MP4 loop (TLottieKitMedia, after 0.1.0)
+TLottieMediaPlayer(try? TLottieMedia(contentsOf: url)).aspectRatio(1, contentMode: .fit)
+
 // Recolor, skin tone, RGBA output
 let options = TLottieAnimation.Options(fitzModifier: .type3,
                                        colorReplacements: [0xFF0000: 0x0A9BF5],
@@ -169,6 +206,7 @@ let options = TLottieAnimation.Options(fitzModifier: .type3,
 - **Do** render at the displayed pixel size, give each simultaneously playing animation its own instance, and cache frames yourself when the same sticker repeats many times. 512×512 BGRA is 1 MiB per frame.
 - **Don't** rely on dotLottie themes or state machines: only the animation JSON inside a `.lottie` is played.
 - **Don't** expect text or images to render.
+- **Don't** pass WebM (Telegram video stickers) to `TLottieMedia`; it throws `.unsupportedFormat`.
 - **Don't** depend on `dkaraush/tlottie` directly from SwiftPM.
 - **Don't** bundle third-party Telegram stickers without the author's permission. Stickers belong to their creators.
 
@@ -196,7 +234,9 @@ let options = TLottieAnimation.Options(fitzModifier: .type3,
 | `apple/exported_symbols.txt`, `apple/module.modulemap`                                           | TLottieKit                    | the exported C surface (`_tlottie_*`) and the `CTLottie` Clang module                                                           |
 | `apple/Sources/TLottieKit/`                                                                      | TLottieKit                    | `TLottieAnimation`, `TLottieView`, `TLottiePlayer`, `PlaybackClock`, `Gzip`, `DotLottie`, `TLottieError` (`.swift`)             |
 | `apple/Tests/TLottieKitTests/`                                                                   | TLottieKit                    | XCTest + `Fixtures/square.json`, `square.tgs`                                                                                   |
-| `apple/Examples/TLottieDemo/`                                                                    | TLottieKit                    | XcodeGen `project.yml` (`.xcodeproj` ignored); `Resources/`: `pulse.json`, free `.tgs`, MIT `.lottie` (`CREDITS.txt`)           |
+| `apple/Sources/TLottieKitMedia/`                                                                 | TLottieKit                    | `TLottieMedia`, `TLottieMediaView`, `TLottieMediaPlayer`, `MediaPlayback`, `SampleSources` (`.swift`)                           |
+| `apple/Tests/TLottieKitMediaTests/`                                                              | TLottieKit                    | XCTest + `Fixtures/pulse.gif`, `pulse.mp4`, `rotated.mp4` (see B2)                                                              |
+| `apple/Examples/TLottieDemo/`                                                                    | TLottieKit                    | XcodeGen `project.yml` (`.xcodeproj` ignored); `Resources/`: Lottie samples, `bounce.gif`, `cat.mp4` (`CREDITS.txt`)            |
 | `apple/release.sh`, `.github/workflows/apple.yml`, `.github/README.md`, `AGENTS.md`, `CLAUDE.md` | TLottieKit                    | `.github/README.md` is what GitHub shows; the root `README.md` stays upstream's                                                 |
 | `research-cache/`, `apple/build/`, `apple/Artifacts/`, `.build/`                                 | local only                    | gitignored                                                                                                                      |
 
@@ -205,12 +245,15 @@ let options = TLottieAnimation.Options(fitzModifier: .type3,
 ```sh
 ./apple/build-xcframework.sh                 # ~1 min warm; needs rustup (adds missing targets itself)
 SKIP_ZIP=1 ./apple/build-xcframework.sh      # skip the release zip
-swift test                                   # macOS, 29 tests
-xcodebuild test -scheme TLottieKit -destination 'platform=iOS Simulator,name=<any iPhone>'
+swift test                                   # macOS, 42 tests (29 TLottieKit + 13 TLottieKitMedia)
+xcodebuild test -scheme TLottieKit-Package -destination 'platform=iOS Simulator,name=<any iPhone>'
 TLOTTIEKIT_STICKER=/path/x.tgs TLOTTIEKIT_OUTPUT=/tmp/out swift test --filter ExternalSticker   # frame time + contact sheet
 cd apple/Examples/TLottieDemo && xcodegen generate                                             # demo project
 apple/release.sh <version>                   # build zip, rewrite Package.swift, commit, tag, push, gh release
 git fetch upstream --no-tags && git merge upstream/main                                        # sync tlottie
+# media fixtures: pulse.gif is 3 ImageIO-written 16x16 frames (0.05 / 0.25 / 0 s, transparent); the MP4s come from
+ffmpeg -f lavfi -i testsrc2=size=64x64:rate=10:duration=1 -c:v libx264 -preset veryslow -crf 35 -pix_fmt yuv420p -an -movflags +faststart -map_metadata -1 -fflags +bitexact -flags:v +bitexact pulse.mp4
+ffmpeg -display_rotation 90 -i wide64x32.mp4 -c copy -map_metadata -1 -fflags +bitexact rotated.mp4
 ```
 
 ### B3. Invariants (each breaks something silently if violated)
@@ -226,11 +269,13 @@ git fetch upstream --no-tags && git merge upstream/main                         
 9. **SwiftUI name clash:** inside `TLottiePlayer`, the stored property is `lottieAnimation`, because `View.animation(_:)` already exists. On AppKit `NSView` has `animation(forKey:)`, so build macOS after touching `TLottieView`.
 10. **Swift 6 strict concurrency is on.** `CGImage` crosses threads only inside `RenderedFrame` (`@unchecked Sendable`). The macOS `Timer` block invalidates the timer outside `MainActor.assumeIsolated`.
 11. **Licensing.** Never copy code from Telegram-iOS (for example its `TLottieAnimation.mm`): that repository has no LICENSE file, and this package is MIT.
+12. **Feed media only through `renderer`.** Current SDKs make `AVSampleBufferDisplayLayer` main-actor isolated. Off the main thread, `MediaPlayback` uses `layer.sampleBufferRenderer` (iOS 17 / macOS 14+) or the layer as `AVQueuedSampleBufferRendering` before that.
+13. **Passthrough video samples carry media time.** Shift them by the first edit segment's media start (x264 starts at its B-frame delay), or the first frame shows late and `.playOnce` ends before the last frame.
 
 ### B4. Definition of done for a change
 
 1. `swift test` passes on macOS.
-2. `xcodebuild test -scheme TLottieKit` passes on an iOS simulator.
+2. `xcodebuild test -scheme TLottieKit-Package` passes on an iOS simulator.
 3. When the build script changed: zero `ld: warning` lines in the build output, and the `nm` check from B3.2 passes.
 4. Public API changed → update A3 above and `.github/README.md`.
 5. Commits follow the house style: lowercase, past tense, plain English, no `feat:` prefixes.
@@ -247,5 +292,6 @@ git fetch upstream --no-tags && git merge upstream/main                         
 - No measurements on a real iPhone yet. The published numbers come from the Mac and the iOS Simulator.
 - No frame cache or buffer pool in `TLottieView`: every frame allocates a new buffer.
 - No Reduce Motion handling.
+- Media: no WebM / VP9. How many hardware video decoders a real iPhone runs at once is unmeasured: the demo's 13 parallel videos were checked on the simulator only.
 - Release binaries are built locally. Building them in CI from source would give provenance.
 - Upstream contribution in progress: issue `dkaraush/tlottie#17` (opened 2026-10-27) proposes `examples/apple/` (from-source `build.sh`, the Swift package, tests and demo) plus a README section linking to this package. The ready branch is `feature/upstream-apple-example`, based on `upstream/main`. Open the PR against upstream `main` only after the maintainer answers. Never add a root `Package.swift`, binaries or release tooling to upstream.

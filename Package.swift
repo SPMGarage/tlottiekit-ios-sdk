@@ -24,7 +24,9 @@ let package = Package(
         .macOS(.v11)
     ],
     products: [
-        .library(name: "TLottieKit", targets: ["TLottieKit"])
+        .library(name: "TLottieKit", targets: ["TLottieKit"]),
+        // GIF and MP4 loops (Telegram-style "GIFs"), played by AVFoundation.
+        .library(name: "TLottieKitMedia", targets: ["TLottieKitMedia"])
     ],
     targets: [
         ctlottie,
@@ -38,6 +40,17 @@ let package = Package(
             name: "TLottieKitTests",
             dependencies: ["TLottieKit"],
             path: "apple/Tests/TLottieKitTests",
+            resources: [.copy("Fixtures")]
+        ),
+        .target(
+            name: "TLottieKitMedia",
+            dependencies: ["TLottieKit"],
+            path: "apple/Sources/TLottieKitMedia"
+        ),
+        .testTarget(
+            name: "TLottieKitMediaTests",
+            dependencies: ["TLottieKitMedia"],
+            path: "apple/Tests/TLottieKitMediaTests",
             resources: [.copy("Fixtures")]
         )
     ],
