@@ -26,6 +26,15 @@ cargo rustc --release --features c-api --lib --crate-type staticlib
 
 Example on how to work with `tlottie.wasm` is at [examples/web/](https://github.com/dkaraush/tlottie/tree/dev/examples/web).
 
+### Building (Apple)
+
+```bash
+./examples/apple/build.sh
+# xcframework will be built at examples/apple/Artifacts/CTLottie.xcframework
+```
+
+[examples/apple/](examples/apple) is a Swift package for iOS 13+ and macOS 11+ (Lottie JSON and `.tgs`, a `UIView`/`NSView` player and a SwiftUI view) with a demo app: `cd examples/apple/Demo && xcodegen generate`. A prebuilt version that installs with Swift Package Manager, without Rust, is at [SPMGarage/tlottiekit-ios-sdk](https://github.com/SPMGarage/tlottiekit-ios-sdk).
+
 ### Benchmarks
 
 Frame time, mainly compared to [rlottie2019](https://github.com/TelegramMessenger/rlottie).

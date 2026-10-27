@@ -1,0 +1,8 @@
+Artifacts/
+build/
+.build/
+.swiftpm/
+Package.resolved
+Demo/*.xcodeproj
+Demo/build/
+xcuserdata/
