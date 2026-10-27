@@ -15,3 +15,6 @@ __pycache__/
 /apple/Examples/TLottieDemo/*.xcodeproj
 /apple/Examples/TLottieDemo/build/
 xcuserdata/
+
+# claude-agents: per-developer plugin profile (do not commit)
+.claude/settings.local.json
