@@ -11,6 +11,21 @@ Swift Package for [tlottie](https://github.com/dkaraush/tlottie), the Rust Lotti
 
 This repository is a fork of [dkaraush/tlottie](https://github.com/dkaraush/tlottie). The Rust sources are upstream's and are unchanged. Everything Apple-specific lives in `apple/`, plus `Package.swift`.
 
+> **AI coding agents:** read [`AGENTS.md`](../AGENTS.md). It has the complete API, the behaviour contracts, the build invariants and the do/don't rules.
+
+## Why this package exists
+
+Upstream tlottie is a Rust crate with a C API. It ships no `Package.swift`, no XCFramework and no Swift API. Its only samples are `examples/android` (NDK + JNI) and `examples/web` (WASM).
+
+Telegram iOS builds tlottie from source with Bazel. It is not Bazel-specific code: any Xcode project can use it. Without this package, though, every project has to do the following by hand:
+
+1. Install Rust.
+2. Build a separate static library for the device and for the simulator.
+3. Link it and set up a bridging header.
+4. Write its own `.tgs` loading, image conversion and playback.
+
+TLottieKit does all of that once. Add the URL and write `import TLottieKit`.
+
 ## Installation
 
 Swift Package Manager:
@@ -93,6 +108,52 @@ let animation = try TLottieAnimation(data: data, options: options)
 
 `TLottieAnimation` is `Sendable`. One instance may be used from any thread, but its renders run one at a time, because a tlottie instance is single-threaded. To animate many stickers in parallel, as in a grid, give each view its own instance.
 
+## Supported files
+
+| File                                    | Supported                                                        |
+| --------------------------------------- | ---------------------------------------------------------------- |
+| Telegram `.tgs`                         | Yes. gzip is detected from the file contents, not the extension. |
+| Lottie JSON `.json` (Bodymovin)         | Yes, for the features listed below.                              |
+| dotLottie `.lottie`                     | Not yet. It is a ZIP: unzip it and use `a/<name>.json`.          |
+| WebM, GIF, APNG, WebP, SVG, Rive `.riv` | No. These are not Lottie.                                        |
+
+**Renders:**
+
+- **Layers:** shape, solid, null, precomp and parenting.
+- **Shapes:** path, rect, ellipse, star/polygon.
+- **Paint:** fill, stroke, gradient fill and gradient stroke.
+- **Modifiers:** trim path, round corners, repeater.
+- **Layer effects:** masks, track mattes, time remap and time stretch.
+
+**Skipped without an error:**
+
+- text layers;
+- image layers (embedded images);
+- expressions;
+- merge paths;
+- layer effects.
+
+Anything valid as a Telegram sticker renders fully.
+
+### Where to get animations
+
+- **Telegram stickers (`.tgs`).** Save them from Telegram Desktop or macOS, or fetch them with the Bot API (`getStickerSet` + `getFile`). Stickers belong to their authors, so get permission before you ship one in an app.
+- **[LottieFiles](https://lottiefiles.com).** Download as **Lottie JSON**; the default download is `.lottie`. Check each animation's license.
+- **Animated icon sites** (Lordicon, IconScout, …). They export Lottie JSON; free tiers usually require attribution.
+- **Your own.** Use After Effects with the Bodymovin or LottieFiles plugin; Bodymovin-TG only allows Telegram-safe features. LottieFiles Creator and Figma plugins also export Lottie.
+- **Conversions.**
+  - `.json` → `.tgs`: `gzip -9 -n anim.json > anim.tgs`
+  - `.lottie` → `.json`: unzip it.
+  - Other formats: `pip install lottie` (python-lottie).
+
+To check a file quickly, open it in the demo app, or run:
+
+```sh
+TLOTTIEKIT_STICKER=~/Downloads/anim.json TLOTTIEKIT_OUTPUT=/tmp/out swift test --filter ExternalSticker
+```
+
+The test prints the frame time and writes a contact sheet of the frames.
+
 ## Performance
 
 Measured with this package on 2026-10-27 with the Rust core built in release mode:
@@ -123,7 +184,8 @@ On iOS, `.tgs` files copied into the app's Documents folder (Files app, Finder) 
 
 ## Limitations
 
-- **No dotLottie.** `.lottie` ZIP containers are not supported yet. Unzip one and pass the JSON inside.
+- **No dotLottie, text, images or expressions.** See [Supported files](#supported-files).
+- **No frame cache yet.** Each frame is rendered into a new buffer. For grids that repeat the same sticker, cache frames in your app.
 - **Static compositions report one frame.** tlottie reports `frameCount == 1` for a composition it can prove static.
 - **Bugs crash instead of failing.** The Rust core is built with `panic=abort`, so a bug inside tlottie crashes the app. A failing render does not crash: malformed input throws `TLottieError`, because upstream treats Lottie JSON as untrusted input.
 
