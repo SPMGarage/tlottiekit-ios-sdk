@@ -109,7 +109,8 @@ struct DemoItem: Identifiable, Hashable {
 
 @MainActor
 final class DemoModel: ObservableObject {
-    static let contentTypes: [UTType] = [.json, UTType(filenameExtension: "tgs") ?? .data]
+    static let fileExtensions = ["json", "tgs", "lottie"]
+    static let contentTypes: [UTType] = fileExtensions.map { UTType(filenameExtension: $0) ?? .data }
 
     @Published private(set) var items: [DemoItem] = []
     @Published private(set) var selected: DemoItem?
@@ -120,12 +121,12 @@ final class DemoModel: ObservableObject {
 
     private static let gridSize = 12
 
-    /// Bundled samples plus every .tgs / .json in the app's Documents folder.
+    /// Bundled samples plus every .tgs / .json / .lottie in the app's Documents folder.
     func reload() {
-        var urls = ["json", "tgs"].flatMap { Bundle.main.urls(forResourcesWithExtension: $0, subdirectory: nil) ?? [] }
+        var urls = Self.fileExtensions.flatMap { Bundle.main.urls(forResourcesWithExtension: $0, subdirectory: nil) ?? [] }
         if let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first,
            let files = try? FileManager.default.contentsOfDirectory(at: documents, includingPropertiesForKeys: nil) {
-            urls += files.filter { ["tgs", "json"].contains($0.pathExtension.lowercased()) }
+            urls += files.filter { Self.fileExtensions.contains($0.pathExtension.lowercased()) }
         }
         items = urls.sorted { $0.lastPathComponent < $1.lastPathComponent }.map(DemoItem.init)
         if selected == nil {

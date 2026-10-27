@@ -39,7 +39,7 @@ In Xcode, use File ▸ Add Package Dependencies…, paste the same URL, choose "
 | -------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------- |
 | Telegram `.tgs`                              | yes                                | gzip, detected by the magic bytes `1f 8b` regardless of file extension, inflated in-process (zlib) |
 | Lottie JSON `.json` (Bodymovin)              | yes, within the feature list below | passed to tlottie as is                                                                            |
-| dotLottie `.lottie` (ZIP)                    | **no**                             | unzip it and pass `a/<name>.json` (dotLottie v2 layout)                                            |
+| dotLottie `.lottie` (ZIP)                    | yes, within the feature list below | ZIP read in-process; plays the manifest's initial (else first) animation; images, themes ignored   |
 | WebM / GIF / APNG / WebP / SVG / Rive `.riv` | **no**                             | not Lottie                                                                                         |
 
 Lottie features that **render**:
@@ -71,12 +71,12 @@ public final class TLottieAnimation: @unchecked Sendable {
         public var colorReplacements: [UInt32: UInt32]           // 0xRRGGBB -> 0xRRGGBB, alpha byte ignored; default [:]
         public var layerColorReplacements: [String: UInt32]      // layer-name prefix -> straight-alpha 0xAARRGGBB; default [:]
         public var pixelFormat: TLottiePixelFormat               // default .bgra
-        public var maxDecompressedSize: Int                      // .tgs inflate cap in bytes; default 8 MiB
+        public var maxDecompressedSize: Int                      // .tgs / .lottie inflate cap in bytes; default 8 MiB
         public init(fitzModifier:colorReplacements:layerColorReplacements:pixelFormat:maxDecompressedSize:) // all defaulted
     }
     public init(data: Data, options: Options = Options()) throws
     public convenience init(contentsOf url: URL, options: Options = Options()) throws
-    public convenience init(named name: String, bundle: Bundle = .main, options: Options = Options()) throws // looks for name.tgs, then name.json
+    public convenience init(named name: String, bundle: Bundle = .main, options: Options = Options()) throws // looks for name.tgs, name.json, then name.lottie
     public let size: CGSize            // composition w x h
     public let frameCount: Int         // >= 1; a composition tlottie proves static reports 1
     public let frameRate: Double       // `fr`, or 0 when missing/invalid
@@ -138,7 +138,7 @@ public struct TLottiePlayer: UIViewRepresentable /* NSViewRepresentable on macOS
   - It calls `play()` only when `isPlaying` flips `false → true` or the animation instance changes. A finished `.playOnce` is therefore not restarted by unrelated SwiftUI updates.
   - It has no intrinsic size. Give it a `.frame` or `.aspectRatio`.
 - **Errors.**
-  - Malformed JSON, a corrupt or truncated gzip, or an oversized inflate throws. None of them crash.
+  - Malformed JSON, a corrupt or truncated gzip or ZIP, a `.lottie` without an animation, or an oversized inflate throws. None of them crash.
   - A bug _inside_ tlottie aborts the process: the Rust core is built with `panic=abort`.
 
 ### A5. Recipes (all compile against 0.1.0)
@@ -167,7 +167,7 @@ let options = TLottieAnimation.Options(fitzModifier: .type3,
 ### A6. Do / don't
 
 - **Do** render at the displayed pixel size, give each simultaneously playing animation its own instance, and cache frames yourself when the same sticker repeats many times. 512×512 BGRA is 1 MiB per frame.
-- **Don't** pass a `.lottie` ZIP; it throws `.invalidData`.
+- **Don't** rely on dotLottie themes or state machines: only the animation JSON inside a `.lottie` is played.
 - **Don't** expect text or images to render.
 - **Don't** depend on `dkaraush/tlottie` directly from SwiftPM.
 - **Don't** bundle third-party Telegram stickers without the author's permission. Stickers belong to their creators.
@@ -177,10 +177,10 @@ let options = TLottieAnimation.Options(fitzModifier: .type3,
 | Source                                                                                                                    | Format                                                                                            | Notes                                     |
 | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------- |
 | Telegram (Desktop/macOS save; Bot API `getStickerSet` + `getFile`)                                                        | `.tgs`                                                                                            | Check the author's rights before shipping |
-| lottiefiles.com                                                                                                           | choose **"Lottie JSON"** when downloading (the default is `.lottie`)                              | check each animation's license            |
+| lottiefiles.com                                                                                                           | the default `.lottie` download or **"Lottie JSON"**; both work                                    | check each animation's license            |
 | Lordicon, IconScout and similar icon sites                                                                                | Lottie JSON                                                                                       | free tiers often require attribution      |
 | After Effects + Bodymovin / LottieFiles plugin; Bodymovin-TG for Telegram-safe output; LottieFiles Creator; Figma plugins | JSON / `.tgs`                                                                                     | stay within the A2 feature list           |
-| Conversion                                                                                                                | `gzip -9 -n a.json > a.tgs`; unzip `.lottie` → `a/*.json`; `python-lottie` (`pip install lottie`) |                                           |
+| Conversion                                                                                                                | `gzip -9 -n a.json > a.tgs`; `python-lottie` (`pip install lottie`)                               |                                           |
 
 ---
 
@@ -194,9 +194,9 @@ let options = TLottieAnimation.Options(fitzModifier: .type3,
 | `Package.swift`                                                                                  | TLottieKit                    | `releaseURL` / `releaseChecksum` lines are rewritten by `apple/release.sh`                                                      |
 | `apple/build-xcframework.sh`                                                                     | TLottieKit                    | Rust → `apple/Artifacts/CTLottie.xcframework` (+ `.zip` + checksum)                                                             |
 | `apple/exported_symbols.txt`, `apple/module.modulemap`                                           | TLottieKit                    | the exported C surface (`_tlottie_*`) and the `CTLottie` Clang module                                                           |
-| `apple/Sources/TLottieKit/`                                                                      | TLottieKit                    | `TLottieAnimation.swift`, `TLottieView.swift`, `TLottiePlayer.swift`, `PlaybackClock.swift`, `Gzip.swift`, `TLottieError.swift` |
+| `apple/Sources/TLottieKit/`                                                                      | TLottieKit                    | `TLottieAnimation`, `TLottieView`, `TLottiePlayer`, `PlaybackClock`, `Gzip`, `DotLottie`, `TLottieError` (`.swift`)             |
 | `apple/Tests/TLottieKitTests/`                                                                   | TLottieKit                    | XCTest + `Fixtures/square.json`, `square.tgs`                                                                                   |
-| `apple/Examples/TLottieDemo/`                                                                    | TLottieKit                    | XcodeGen `project.yml` (`.xcodeproj` is generated and ignored); `Resources/` has `pulse.json` + free sample `.tgs` stickers     |
+| `apple/Examples/TLottieDemo/`                                                                    | TLottieKit                    | XcodeGen `project.yml` (`.xcodeproj` ignored); `Resources/`: `pulse.json`, free `.tgs`, MIT `.lottie` (`CREDITS.txt`)           |
 | `apple/release.sh`, `.github/workflows/apple.yml`, `.github/README.md`, `AGENTS.md`, `CLAUDE.md` | TLottieKit                    | `.github/README.md` is what GitHub shows; the root `README.md` stays upstream's                                                 |
 | `research-cache/`, `apple/build/`, `apple/Artifacts/`, `.build/`                                 | local only                    | gitignored                                                                                                                      |
 
@@ -205,7 +205,7 @@ let options = TLottieAnimation.Options(fitzModifier: .type3,
 ```sh
 ./apple/build-xcframework.sh                 # ~1 min warm; needs rustup (adds missing targets itself)
 SKIP_ZIP=1 ./apple/build-xcframework.sh      # skip the release zip
-swift test                                   # macOS, 24 tests
+swift test                                   # macOS, 29 tests
 xcodebuild test -scheme TLottieKit -destination 'platform=iOS Simulator,name=<any iPhone>'
 TLOTTIEKIT_STICKER=/path/x.tgs TLOTTIEKIT_OUTPUT=/tmp/out swift test --filter ExternalSticker   # frame time + contact sheet
 cd apple/Examples/TLottieDemo && xcodegen generate                                             # demo project
@@ -246,7 +246,6 @@ git fetch upstream --no-tags && git merge upstream/main                         
 
 - No measurements on a real iPhone yet. The published numbers come from the Mac and the iOS Simulator.
 - No frame cache or buffer pool in `TLottieView`: every frame allocates a new buffer.
-- No dotLottie (`.lottie`) support. It needs a ZIP reader; zlib is already linked.
 - No Reduce Motion handling.
 - Release binaries are built locally. Building them in CI from source would give provenance.
 - Upstream contribution in progress: issue `dkaraush/tlottie#17` (opened 2026-10-27) proposes `examples/apple/` (from-source `build.sh`, the Swift package, tests and demo) plus a README section linking to this package. The ready branch is `feature/upstream-apple-example`, based on `upstream/main`. Open the PR against upstream `main` only after the maintainer answers. Never add a root `Package.swift`, binaries or release tooling to upstream.

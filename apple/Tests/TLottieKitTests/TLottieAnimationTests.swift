@@ -63,6 +63,51 @@ final class TLottieAnimationTests: XCTestCase {
         }
     }
 
+    // MARK: dotLottie
+
+    func testDotLottieRendersExactlyLikeItsJSON() throws {
+        let json = try TLottieAnimation(data: Fixtures.json)
+        // dotLottie 2 deflated, dotLottie 1 stored, and an archive without a manifest.
+        for name in ["square", "square-v1", "no-manifest"] {
+            let lottie = try TLottieAnimation(data: Fixtures.lottie(name))
+            XCTAssertEqual(lottie.size, json.size, name)
+            XCTAssertEqual(lottie.frameCount, json.frameCount, name)
+            for frame in [0.0, 30, 59] {
+                XCTAssertEqual(try render(lottie, frame: frame), try render(json, frame: frame), "\(name) frame \(frame)")
+            }
+        }
+    }
+
+    func testDotLottieStartsWithTheManifestsInitialAnimation() throws {
+        // two.lottie lists a 200-wide animation first, but its manifest starts with "square".
+        let animation = try TLottieAnimation(data: Fixtures.lottie("two"))
+        XCTAssertEqual(animation.size, CGSize(width: 100, height: 100))
+    }
+
+    func testRejectsTruncatedDotLottie() {
+        let lottie = Fixtures.lottie("square")
+        for length in [4, 30, lottie.count / 2, lottie.count - 1] {
+            XCTAssertThrowsError(try TLottieAnimation(data: lottie.prefix(length)), "\(length) bytes")
+        }
+    }
+
+    func testRejectsDotLottieEntryWithBadChecksum() throws {
+        // The v1 fixture stores the animation uncompressed, right after its local header name.
+        var lottie = Fixtures.lottie("square-v1")
+        let name = try XCTUnwrap(lottie.range(of: Data("animations/square.json".utf8)))
+        lottie[name.upperBound + 10] ^= 0xFF
+        XCTAssertThrowsError(try TLottieAnimation(data: lottie)) { error in
+            XCTAssertEqual(error as? TLottieError, .decompressionFailed)
+        }
+    }
+
+    func testDotLottieStopsAtTheSizeLimit() {
+        let options = TLottieAnimation.Options(maxDecompressedSize: 100)
+        XCTAssertThrowsError(try TLottieAnimation(data: Fixtures.lottie("square"), options: options)) { error in
+            XCTAssertEqual(error as? TLottieError, .decompressedSizeLimitExceeded(limit: 100))
+        }
+    }
+
     // MARK: Pixels
 
     func testBGRAByteOrderAndOrientation() throws {
@@ -220,6 +265,10 @@ private final class ResultsBox: @unchecked Sendable {
 enum Fixtures {
     static let json = load("square", "json")
     static let tgs = load("square", "tgs")
+
+    static func lottie(_ name: String) -> Data {
+        load(name, "lottie")
+    }
 
     private static func load(_ name: String, _ ext: String) -> Data {
         guard

@@ -23,7 +23,8 @@ public enum TLottiePixelFormat: Sendable {
     case rgba
 }
 
-/// A parsed Lottie animation, loaded from Lottie JSON or a Telegram `.tgs` file.
+/// A parsed Lottie animation, loaded from Lottie JSON, a Telegram `.tgs` file
+/// or a dotLottie `.lottie` file.
 ///
 /// One instance can be used from any thread: renders are serialized on an
 /// internal lock, because a tlottie instance is single-threaded. Use one
@@ -40,8 +41,9 @@ public final class TLottieAnimation: @unchecked Sendable {
         public var layerColorReplacements: [String: UInt32]
         /// Byte order of rendered pixels.
         public var pixelFormat: TLottiePixelFormat
-        /// Upper bound for a decompressed `.tgs` file, so a tiny file can not
-        /// expand into gigabytes. Telegram stickers are well below 1 MB.
+        /// Upper bound for a decompressed `.tgs` file or `.lottie` entry, so a
+        /// tiny file can not expand into gigabytes. Telegram stickers are well
+        /// below 1 MB.
         public var maxDecompressedSize: Int
 
         public init(
@@ -78,11 +80,19 @@ public final class TLottieAnimation: @unchecked Sendable {
     // Packed frame for destinations with row padding; guarded by `lock`.
     private var scratch: [UInt32] = []
 
-    /// Loads Lottie JSON, or a gzip-compressed `.tgs` file (detected by its header).
+    /// Loads Lottie JSON, a gzip-compressed `.tgs` file or a dotLottie `.lottie`
+    /// ZIP archive. The format is detected from the data, not the file name.
+    /// For a `.lottie` file with several animations, the manifest's initial one
+    /// is loaded, or the first one.
     public init(data: Data, options: Options = Options()) throws {
-        let json = Gzip.isCompressed(data)
-            ? try Gzip.decompress(data, limit: options.maxDecompressedSize)
-            : data
+        let json: Data
+        if Gzip.isCompressed(data) {
+            json = try Gzip.decompress(data, limit: options.maxDecompressedSize)
+        } else if DotLottie.isArchive(data) {
+            json = try DotLottie.animationJSON(from: data, limit: options.maxDecompressedSize)
+        } else {
+            json = data
+        }
         guard !json.isEmpty, let handle = Self.makeHandle(json: json, options: options) else {
             throw TLottieError.invalidData
         }
@@ -94,14 +104,14 @@ public final class TLottieAnimation: @unchecked Sendable {
         self.frameRate = rate.isFinite && rate > 0 ? rate : 0
     }
 
-    /// Loads a `.tgs` or Lottie JSON file.
+    /// Loads a `.tgs`, Lottie JSON or `.lottie` file.
     public convenience init(contentsOf url: URL, options: Options = Options()) throws {
         try self.init(data: Data(contentsOf: url), options: options)
     }
 
-    /// Loads `name.tgs` or `name.json` from a bundle.
+    /// Loads `name.tgs`, `name.json` or `name.lottie` from a bundle, in that order.
     public convenience init(named name: String, bundle: Bundle = .main, options: Options = Options()) throws {
-        let url = ["tgs", "json"].lazy.compactMap { bundle.url(forResource: name, withExtension: $0) }.first
+        let url = ["tgs", "json", "lottie"].lazy.compactMap { bundle.url(forResource: name, withExtension: $0) }.first
         guard let url else {
             throw TLottieError.resourceNotFound(name: name)
         }

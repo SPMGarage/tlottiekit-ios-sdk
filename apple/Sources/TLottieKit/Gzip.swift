@@ -10,13 +10,22 @@ enum Gzip {
     /// Inflates a gzip stream, refusing to produce more than `limit` bytes
     /// so a tiny file can not expand into gigabytes.
     static func decompress(_ data: Data, limit: Int) throws -> Data {
+        // 16 + MAX_WBITS tells zlib to expect a gzip header instead of a zlib one.
+        try decompress(data, windowBits: 16 + MAX_WBITS, limit: limit)
+    }
+
+    /// Inflates a raw deflate stream without any header, as stored in ZIP entries.
+    static func inflateRaw(_ data: Data, limit: Int) throws -> Data {
+        try decompress(data, windowBits: -MAX_WBITS, limit: limit)
+    }
+
+    private static func decompress(_ data: Data, windowBits: Int32, limit: Int) throws -> Data {
         guard data.count <= Int(UInt32.max) else {
             throw TLottieError.invalidArgument
         }
 
         var stream = z_stream()
-        // 16 + MAX_WBITS tells zlib to expect a gzip header instead of a zlib one.
-        let initStatus = inflateInit2_(&stream, 16 + MAX_WBITS, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size))
+        let initStatus = inflateInit2_(&stream, windowBits, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size))
         guard initStatus == Z_OK else {
             throw TLottieError.decompressionFailed
         }

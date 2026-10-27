@@ -1,9 +1,9 @@
 # TLottieKit
 
-Swift Package for [tlottie](https://github.com/dkaraush/tlottie), the Rust Lottie renderer that Telegram uses for stickers and animated emoji. Plays Telegram `.tgs` stickers and Lottie JSON on iOS and macOS, from SwiftUI, UIKit or AppKit.
+Swift Package for [tlottie](https://github.com/dkaraush/tlottie), the Rust Lottie renderer that Telegram uses for stickers and animated emoji. Plays Telegram `.tgs` stickers, Lottie JSON and dotLottie `.lottie` files on iOS and macOS, from SwiftUI, UIKit or AppKit.
 
 - **Fast CPU renderer.** SIMD on ARM NEON and x86. A 512×512 Telegram sticker renders in about 0.3 ms per frame on Apple Silicon (see [Performance](#performance)).
-- **`.tgs` and Lottie JSON.** gzip is detected and inflated for you, with a size cap against gzip bombs.
+- **`.tgs`, Lottie JSON and `.lottie`.** gzip and ZIP are detected and inflated for you, with a size cap against decompression bombs.
 - **SwiftUI, UIKit and AppKit players.** Rendering happens off the main thread, and playback pauses while the view is off screen.
 - **Low-level API.** Render any frame into your own buffer (BGRA or RGBA, premultiplied) or into a `CGImage`.
 - **Telegram features.** Color replacement, per-layer recoloring and emoji skin tones (Fitzpatrick modifiers).
@@ -69,7 +69,7 @@ struct StickerView: View {
 
 ```swift
 let view = TLottieView()
-view.animation = try TLottieAnimation(contentsOf: url) // .tgs or .json
+view.animation = try TLottieAnimation(contentsOf: url) // .tgs, .json or .lottie
 view.loopMode = .playOnce
 view.onFinish = { print("done") }
 view.play()
@@ -99,7 +99,7 @@ let options = TLottieAnimation.Options(
     colorReplacements: [0xFF0000: 0x0A9BF5],       // 0xRRGGBB → 0xRRGGBB
     layerColorReplacements: ["eye": 0xFF000000],   // layer-name prefix → 0xAARRGGBB
     pixelFormat: .bgra,
-    maxDecompressedSize: 8 * 1024 * 1024           // .tgs inflate limit
+    maxDecompressedSize: 8 * 1024 * 1024           // .tgs / .lottie inflate limit
 )
 let animation = try TLottieAnimation(data: data, options: options)
 ```
@@ -114,7 +114,7 @@ let animation = try TLottieAnimation(data: data, options: options)
 | --------------------------------------- | ---------------------------------------------------------------- |
 | Telegram `.tgs`                         | Yes. gzip is detected from the file contents, not the extension. |
 | Lottie JSON `.json` (Bodymovin)         | Yes, for the features listed below.                              |
-| dotLottie `.lottie`                     | Not yet. It is a ZIP: unzip it and use `a/<name>.json`.          |
+| dotLottie `.lottie`                     | Yes. Plays the initial animation, without themes or states.      |
 | WebM, GIF, APNG, WebP, SVG, Rive `.riv` | No. These are not Lottie.                                        |
 
 **Renders:**
@@ -138,12 +138,11 @@ Anything valid as a Telegram sticker renders fully.
 ### Where to get animations
 
 - **Telegram stickers (`.tgs`).** Save them from Telegram Desktop or macOS, or fetch them with the Bot API (`getStickerSet` + `getFile`). Stickers belong to their authors, so get permission before you ship one in an app.
-- **[LottieFiles](https://lottiefiles.com).** Download as **Lottie JSON**; the default download is `.lottie`. Check each animation's license.
+- **[LottieFiles](https://lottiefiles.com).** Both the default `.lottie` download and **Lottie JSON** work. Check each animation's license.
 - **Animated icon sites** (Lordicon, IconScout, …). They export Lottie JSON; free tiers usually require attribution.
 - **Your own.** Use After Effects with the Bodymovin or LottieFiles plugin; Bodymovin-TG only allows Telegram-safe features. LottieFiles Creator and Figma plugins also export Lottie.
 - **Conversions.**
   - `.json` → `.tgs`: `gzip -9 -n anim.json > anim.tgs`
-  - `.lottie` → `.json`: unzip it.
   - Other formats: `pip install lottie` (python-lottie).
 
 To check a file quickly, open it in the demo app, or run:
