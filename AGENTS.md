@@ -1,7 +1,7 @@
 # AGENTS.md: TLottieKit
 
 Guide for AI coding agents. It covers two jobs: **(A)** integrating TLottieKit into an app, and **(B)** changing this repository.
-Every statement below was checked against the source as of TLottieKit 0.1.0 (2026-10-27). If code and this file disagree, the code wins. Fix this file in the same change.
+Every statement below was checked against the source as of TLottieKit 0.2.0 (2026-10-27). If code and this file disagree, the code wins. Fix this file in the same change.
 
 ## 0. Identity
 
@@ -10,7 +10,7 @@ Every statement below was checked against the source as of TLottieKit 0.1.0 (202
 | Repository                               | `https://github.com/SPMGarage/tlottiekit-ios-sdk` (GitHub fork of `dkaraush/tlottie`)           |
 | SwiftPM product / module                 | `TLottieKit`; optional `TLottieKitMedia` for GIF / MP4 loops                                    |
 | Package identity in `.product(package:)` | `tlottiekit-ios-sdk`                                                                            |
-| Latest release                           | `0.1.0`                                                                                         |
+| Latest release                           | `0.2.0`                                                                                         |
 | Platforms                                | iOS 13+, macOS 11+ (no tvOS, watchOS, visionOS or Mac Catalyst slices)                          |
 | Toolchain                                | swift-tools-version 6.0, Swift 6 language mode, Xcode 16+                                       |
 | Renderer                                 | tlottie (Rust, CPU rasterizer with SIMD), shipped as the prebuilt static `CTLottie.xcframework` |
@@ -26,13 +26,13 @@ Every statement below was checked against the source as of TLottieKit 0.1.0 (202
 
 ```swift
 // Package.swift
-.package(url: "https://github.com/SPMGarage/tlottiekit-ios-sdk.git", from: "0.1.0"),
+.package(url: "https://github.com/SPMGarage/tlottiekit-ios-sdk.git", from: "0.2.0"),
 // target dependency
 .product(name: "TLottieKit", package: "tlottiekit-ios-sdk"),
 .product(name: "TLottieKitMedia", package: "tlottiekit-ios-sdk"), // optional: GIF / MP4 loops
 ```
 
-In Xcode, use File ▸ Add Package Dependencies…, paste the same URL, choose "Up to Next Major 0.1.0" and add `TLottieKit` to the app target. No Rust toolchain is needed: SwiftPM downloads the binary from GitHub Releases and checks its checksum.
+In Xcode, use File ▸ Add Package Dependencies…, paste the same URL, choose "Up to Next Major 0.2.0" and add `TLottieKit` (and `TLottieKitMedia` for GIF / MP4) to the app target. No Rust toolchain is needed: SwiftPM downloads the binary from GitHub Releases and checks its checksum.
 
 ### A2. Supported input
 
@@ -175,7 +175,7 @@ public struct TLottieMediaPlayer: UIViewRepresentable /* NSViewRepresentable on 
   - One `TLottieMedia` can back any number of views. `TLottieMedia(contentsOf:)` is synchronous: the first call in a process loads AVFoundation (~100 ms seen on the simulator), later ones take a few ms.
   - WebM / VP9 (Telegram video stickers) is not supported.
 
-### A5. Recipes (all compile against 0.1.0)
+### A5. Recipes (all compile against 0.2.0)
 
 ```swift
 // SwiftUI
@@ -191,7 +191,7 @@ view.play()
 // One frame as an image (e.g. a thumbnail)
 let image = try TLottieAnimation(data: data).makeImage(frame: 0, width: 256, height: 256)
 
-// GIF or MP4 loop (TLottieKitMedia, after 0.1.0)
+// GIF or MP4 loop (import TLottieKitMedia)
 TLottieMediaPlayer(try? TLottieMedia(contentsOf: url)).aspectRatio(1, contentMode: .fit)
 
 // Recolor, skin tone, RGBA output
@@ -249,6 +249,7 @@ swift test                                   # macOS, 42 tests (29 TLottieKit + 
 xcodebuild test -scheme TLottieKit-Package -destination 'platform=iOS Simulator,name=<any iPhone>'
 TLOTTIEKIT_STICKER=/path/x.tgs TLOTTIEKIT_OUTPUT=/tmp/out swift test --filter ExternalSticker   # frame time + contact sheet
 cd apple/Examples/TLottieDemo && xcodegen generate                                             # demo project
+xcodebuild test -project apple/Examples/TLottieDemo/TLottieDemo.xcodeproj -scheme TLottieDemo-iOS -destination 'platform=iOS Simulator,name=<any iPhone>'   # UI tests: tap and play every sample
 apple/release.sh <version>                   # build zip, rewrite Package.swift, commit, tag, push, gh release
 git fetch upstream --no-tags && git merge upstream/main                                        # sync tlottie
 # media fixtures: pulse.gif is 3 ImageIO-written 16x16 frames (0.05 / 0.25 / 0 s, transparent); the MP4s come from

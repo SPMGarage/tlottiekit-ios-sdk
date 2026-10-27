@@ -32,7 +32,7 @@ Swift Package Manager:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/SPMGarage/tlottiekit-ios-sdk.git", from: "0.1.0"),
+    .package(url: "https://github.com/SPMGarage/tlottiekit-ios-sdk.git", from: "0.2.0"),
 ],
 targets: [
     .target(name: "App", dependencies: [
@@ -191,7 +191,14 @@ Rendering is CPU rasterization. The cost scales with pixel count, so render at t
 
 ## Demo app
 
-`apple/Examples/TLottieDemo` holds a SwiftUI app for iOS and macOS. It has a player, speed and loop controls, a 12-player grid and a file importer for `.tgs`, `.json`, `.lottie`, `.gif`, `.mp4` and `.mov` files. Pass `-select <name>` to open a sample at launch, and `-grid` to show the grid.
+`apple/Examples/TLottieDemo` holds a SwiftUI app for iOS and macOS. Its files are grouped by format (Lottie JSON, Telegram `.tgs`, dotLottie, GIF, MP4 / MOV), and a header shows what is playing, in which format and through which engine. It has speed and loop controls, a 12-player grid and a file importer. Pass `-select <name>` to open a sample at launch, and `-grid` to show the grid.
+
+`TLottieDemoUITests` taps every sample like a user would and checks the header and that the player animates:
+
+```sh
+xcodebuild test -project apple/Examples/TLottieDemo/TLottieDemo.xcodeproj -scheme TLottieDemo-iOS \
+    -destination 'platform=iOS Simulator,name=iPhone 17'
+```
 
 ```sh
 ./apple/build-xcframework.sh          # once, builds the local XCFramework
