@@ -1,0 +1,25 @@
+name: Apple
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust targets
+        run: rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Build CTLottie.xcframework
+        run: SKIP_ZIP=1 ./apple/build-xcframework.sh
+
+      - name: Test on macOS
+        run: swift test
+
+      - name: Build for the iOS Simulator
+        run: xcodebuild build-for-testing -scheme TLottieKit -destination 'generic/platform=iOS Simulator'

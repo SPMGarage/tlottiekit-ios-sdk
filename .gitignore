@@ -4,3 +4,14 @@ md/
 target/
 __pycache__/
 .opencode/
+
+# TLottieKit (Apple)
+/research-cache/
+/apple/build/
+/apple/Artifacts/
+/.build/
+/.swiftpm/
+/Package.resolved
+/apple/Examples/TLottieDemo/*.xcodeproj
+/apple/Examples/TLottieDemo/build/
+xcuserdata/

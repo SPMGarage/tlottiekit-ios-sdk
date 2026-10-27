@@ -1,0 +1,4 @@
+module CTLottie {
+    header "tlottie.h"
+    export *
+}
